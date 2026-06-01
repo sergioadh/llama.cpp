@@ -4277,6 +4277,7 @@ ggml_backend_sycl_buffer_init_tensor(ggml_backend_buffer_t buffer,
         return;
     }
 
+    tensor->__backend = GGML_BACKEND_TYPE_GPU;
 
     if (ggml_is_quantized(tensor->type)) {
         // initialize padding to 0 to avoid possible NaN values
