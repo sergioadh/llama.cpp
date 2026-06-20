@@ -62,3 +62,12 @@ type.hpp
 | Level Zero allocation | llama.cpp ggml/src/ggml-sycl | ik_llama.cpp ggml/src/ggml-sycl | current commit | Avoids large Arc allocations going through slower or fragile generic SYCL paths. |
 
 | Host memory fallback | llama.cpp ggml/src/ggml-sycl | ik_llama.cpp ggml/src/ggml-sycl | current commit | Allows inference to continue when Arc device memory is exhausted during normal buffer allocation. |
+
+## Performance Kernel Candidates
+
+| Area | llama.cpp commit | Port now | Reason |
+| --- | --- | --- | --- |
+| Q4/Q5/Q6 quantized matmul | dd69db292 | yes | Common quantized LLM path on Arc. |
+| MoE prefill | ebbc1e51c | yes | Important for MoE models when loaded through ik_llama.cpp. |
+| Conv/pool vision ops | 6f1034b32 | no | Not required for initial text server validation. |
+| Flash attention template expansion | a51142497 | no | Baseline server run should be stable before flash-attention template expansion. |
