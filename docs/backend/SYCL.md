@@ -94,6 +94,7 @@ SYCL backend supports Intel GPU Family:
 | Intel Data Center Max Series  | Support | Max 1550, 1100                        |
 | Intel Data Center Flex Series | Support | Flex 170                              |
 | Intel Arc Series              | Support | Arc 770, 730M, Arc A750               |
+| Intel Arc B-Series            | Support | Arc B580                              |
 | Intel built-in Arc GPU        | Support | built-in Arc GPU in Meteor Lake       |
 | Intel iGPU                    | Support | iGPU in 13700k, i5-1250P, i7-1260P, i7-1165G7 |
 
