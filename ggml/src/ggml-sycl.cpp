@@ -4265,9 +4265,10 @@ struct ggml_backend_sycl_buffer_context {
     void * dev_ptr = nullptr;
     queue_ptr stream;
     std::string name;
+    bool is_host_fallback;
 
-     ggml_backend_sycl_buffer_context(int device, void * dev_ptr, queue_ptr stream) :
-        device(device), dev_ptr(dev_ptr), stream(stream) {
+     ggml_backend_sycl_buffer_context(int device, void * dev_ptr, queue_ptr stream, bool is_host_fallback) :
+        device(device), dev_ptr(dev_ptr), stream(stream), is_host_fallback(is_host_fallback) {
             check_allow_gpu_index(device);
             name = (GGML_SYCL_NAME + std::to_string(device));
         }
@@ -4276,7 +4277,11 @@ struct ggml_backend_sycl_buffer_context {
     ~ggml_backend_sycl_buffer_context() {
         if (dev_ptr != nullptr) {
             ggml_sycl_set_device(device);
-            SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(dev_ptr, *stream)));
+            if (is_host_fallback) {
+                SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(dev_ptr, *stream)));
+            } else {
+                SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(dev_ptr, *stream)));
+            }
         }
     }
 };
@@ -4503,7 +4508,21 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     void * dev_ptr;
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)ggml_sycl_malloc_device(
                                     size, *stream)));
-    ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
+    bool is_host_fallback = false;
+#ifdef GGML_SYCL_HOST_MEM_FALLBACK
+    if (!dev_ptr) {
+        SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_host(size, *stream)));
+        if (dev_ptr) {
+            is_host_fallback = true;
+            fprintf(stderr, "%s: device alloc of %zu bytes failed, using host memory fallback\n", __func__, size);
+        }
+    }
+#endif
+    if (!dev_ptr) {
+        fprintf(stderr, "%s: can't allocate %zu bytes for SYCL buffer\n", __func__, size);
+        return nullptr;
+    }
+    ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream, is_host_fallback);
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
 }
 catch (sycl::exception const &exc) {

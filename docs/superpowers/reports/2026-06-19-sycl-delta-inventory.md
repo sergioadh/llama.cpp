@@ -60,3 +60,5 @@ type.hpp
 | Tensor backend marking | old local fix-sycl-buffer-interface commits | ggml/src/ggml-sycl.cpp | current commit | Required so SYCL buffers are treated as GPU-backed tensors. |
 
 | Level Zero allocation | llama.cpp ggml/src/ggml-sycl | ik_llama.cpp ggml/src/ggml-sycl | current commit | Avoids large Arc allocations going through slower or fragile generic SYCL paths. |
+
+| Host memory fallback | llama.cpp ggml/src/ggml-sycl | ik_llama.cpp ggml/src/ggml-sycl | current commit | Allows inference to continue when Arc device memory is exhausted during normal buffer allocation. |
