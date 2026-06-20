@@ -540,6 +540,28 @@ if (GGML_SYCL)
         add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
     endif()
 
+    if (GGML_SYCL_GRAPH)
+        add_compile_definitions(GGML_SYCL_GRAPH)
+    endif()
+
+    if (GGML_SYCL_HOST_MEM_FALLBACK)
+        add_compile_definitions(GGML_SYCL_HOST_MEM_FALLBACK)
+    endif()
+
+    if (GGML_SYCL_SUPPORT_LEVEL_ZERO_API)
+        add_compile_definitions(GGML_SYCL_SUPPORT_LEVEL_ZERO_API)
+    endif()
+
+    if (GGML_SYCL_DNN)
+        add_compile_definitions(GGML_SYCL_DNN)
+    endif()
+
+    if (GGML_SYCL_DEVICE_ARCH)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=spir64_gen -Xs \"-device ${GGML_SYCL_DEVICE_ARCH}\"")
+    elseif (GGML_SYCL_TARGET STREQUAL "INTEL")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Xs -ze-intel-greater-than-4GB-buffer-required")
+    endif()
+
     file(GLOB   GGML_HEADERS_SYCL "ggml-sycl/*.hpp")
     list(APPEND GGML_HEADERS_SYCL "../include/ggml-sycl.h")
 
