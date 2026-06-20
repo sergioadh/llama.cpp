@@ -12,6 +12,12 @@
 
 #include "common.hpp"
 
+#include <sycl/backend.hpp>
+
+#ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
+#include <level_zero/ze_api.h>
+#endif
+
 int get_current_device_id() {
   return dpct::dev_mgr::instance().current_device_id();
 }
@@ -50,4 +56,57 @@ void ggml_sycl_host_free(void* ptr) try {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
+}
+
+#ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
+static bool ggml_sycl_use_level_zero_device_alloc(sycl::queue &q) {
+    return g_ggml_sycl_use_level_zero_api &&
+        q.get_device().is_gpu() &&
+        q.get_backend() == sycl::backend::ext_oneapi_level_zero;
+}
+#endif
+
+void * ggml_sycl_malloc_device(size_t size, sycl::queue &q) {
+#ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
+    if (ggml_sycl_use_level_zero_device_alloc(q)) {
+        void * ptr = nullptr;
+        auto ze_ctx = sycl::get_native<sycl::backend::ext_oneapi_level_zero>(q.get_context());
+        auto ze_dev = sycl::get_native<sycl::backend::ext_oneapi_level_zero>(q.get_device());
+#ifdef ZE_RELAXED_ALLOCATION_LIMITS_EXP_NAME
+        ze_relaxed_allocation_limits_exp_desc_t relaxed_desc = {
+            ZE_STRUCTURE_TYPE_RELAXED_ALLOCATION_LIMITS_EXP_DESC,
+            nullptr,
+            ZE_RELAXED_ALLOCATION_LIMITS_EXP_FLAG_MAX_SIZE,
+        };
+        ze_device_mem_alloc_desc_t alloc_desc = {
+            ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC,
+            &relaxed_desc,
+            0,
+            0,
+        };
+#else
+        ze_device_mem_alloc_desc_t alloc_desc = {ZE_STRUCTURE_TYPE_DEVICE_MEM_ALLOC_DESC, nullptr, 0, 0};
+#endif
+        ze_result_t r = zeMemAllocDevice(ze_ctx, &alloc_desc, size, 64, ze_dev, &ptr);
+        if (r == ZE_RESULT_SUCCESS && ptr) {
+            return ptr;
+        }
+        return nullptr;
+    }
+#endif
+    return sycl::malloc_device(size, q);
+}
+
+void ggml_sycl_free_device(void * ptr, sycl::queue &q) {
+    if (!ptr) {
+        return;
+    }
+#ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
+    if (ggml_sycl_use_level_zero_device_alloc(q)) {
+        auto ze_ctx = sycl::get_native<sycl::backend::ext_oneapi_level_zero>(q.get_context());
+        zeMemFree(ze_ctx, ptr);
+        return;
+    }
+#endif
+    SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, q)));
 }

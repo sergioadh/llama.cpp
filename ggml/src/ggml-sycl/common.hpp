@@ -26,6 +26,9 @@
 
 void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
+extern int g_ggml_sycl_use_level_zero_api;
+void * ggml_sycl_malloc_device(size_t size, sycl::queue &q);
+void ggml_sycl_free_device(void * ptr, sycl::queue &q);
 
 static int g_ggml_sycl_debug = 0;
 #define GGML_SYCL_DEBUG(...)        \

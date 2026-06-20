@@ -58,3 +58,5 @@ type.hpp
 | Build options | llama.cpp ggml/CMakeLists.txt | ik_llama.cpp ggml/CMakeLists.txt | current commit | Enable Arc/B580 runtime switches and Level Zero controls. |
 
 | Tensor backend marking | old local fix-sycl-buffer-interface commits | ggml/src/ggml-sycl.cpp | current commit | Required so SYCL buffers are treated as GPU-backed tensors. |
+
+| Level Zero allocation | llama.cpp ggml/src/ggml-sycl | ik_llama.cpp ggml/src/ggml-sycl | current commit | Avoids large Arc allocations going through slower or fragile generic SYCL paths. |

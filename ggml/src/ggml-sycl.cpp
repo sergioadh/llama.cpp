@@ -75,6 +75,8 @@ typedef void (*ggml_sycl_op_flatten_t)(ggml_backend_sycl_context & ctx, const gg
                                        const float *src1_dd, float *dst_dd,
                                        const queue_ptr &main_stream);
 
+int g_ggml_sycl_use_level_zero_api = 0;
+
 static __dpct_inline__ float op_repeat(const float a, const float b) {
     return b;
     GGML_UNUSED(a);
@@ -1968,6 +1970,12 @@ static ggml_sycl_device_info ggml_sycl_init() {
     for (int id = 0; id < info.device_count; ++id) {
         info.default_tensor_split[id] /= total_vram;
     }
+
+#ifdef GGML_SYCL_SUPPORT_LEVEL_ZERO_API
+    g_ggml_sycl_use_level_zero_api = get_sycl_env("GGML_SYCL_USE_LEVEL_ZERO_API", 1);
+#else
+    g_ggml_sycl_use_level_zero_api = 0;
+#endif
     return info;
 }
 
@@ -2018,7 +2026,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
         for (int i = 0; i < MAX_SYCL_BUFFERS; ++i) {
             ggml_sycl_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(b.ptr, *qptr)));
+                SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(b.ptr, *qptr)));
                 pool_size -= b.size;
             }
         }
@@ -2067,7 +2075,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
         size_t look_ahead_size = (size_t) (1.05 * size);
 
         SYCL_CHECK(
-            CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_device(
+            CHECK_TRY_ERROR(ptr = (void *)ggml_sycl_malloc_device(
                                 look_ahead_size, *qptr)));
         *actual_size = look_ahead_size;
         pool_size += look_ahead_size;
@@ -2090,7 +2098,7 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
             }
         }
         fprintf(stderr, "WARNING: sycl buffer pool full, increase MAX_sycl_BUFFERS\n");
-        SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(ptr, *qptr)));
+        SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(ptr, *qptr)));
         pool_size -= size;
     }
 };
@@ -4268,7 +4276,7 @@ struct ggml_backend_sycl_buffer_context {
     ~ggml_backend_sycl_buffer_context() {
         if (dev_ptr != nullptr) {
             ggml_sycl_set_device(device);
-            SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(dev_ptr, *stream)));
+            SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(dev_ptr, *stream)));
         }
     }
 };
@@ -4493,7 +4501,7 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     size = std::max(size, (size_t)1); // syclMalloc returns null for size 0
 
     void * dev_ptr;
-    SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
+    SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)ggml_sycl_malloc_device(
                                     size, *stream)));
     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
@@ -4632,7 +4640,7 @@ struct ggml_backend_sycl_split_buffer_context {
                     code.
                     */
                     ggml_sycl_set_device(i);
-                    SYCL_CHECK(CHECK_TRY_ERROR(sycl::free(
+                    SYCL_CHECK(CHECK_TRY_ERROR(ggml_sycl_free_device(
                         extra->data_device[i], *(streams[i]))));
                 }
             }
@@ -4713,7 +4721,7 @@ ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
         error codes. The original code was commented out and a warning string
         was inserted. You need to rewrite this code.
         */
-        SYCL_CHECK(CHECK_TRY_ERROR(buf = (char *)sycl::malloc_device(
+        SYCL_CHECK(CHECK_TRY_ERROR(buf = (char *)ggml_sycl_malloc_device(
                                         size, *stream)));
 
         // set padding to 0 to avoid possible NaN values
