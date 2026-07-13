@@ -86,6 +86,14 @@ static __dpct_inline__ float op_add(const float a, const float b) {
     return a + b;
 }
 
+static __dpct_inline__ float op_mul(const float a, const float b) {
+    return a * b;
+}
+
+static __dpct_inline__ float op_div(const float a, const float b) {
+    return a / b;
+}
+
 template<float (*bin_op)(const float, const float), typename src0_t, typename src1_t, typename dst_t>
 static void k_bin_bcast(const src0_t * src0, const src1_t * src1, dst_t * dst,
         int ne0, int ne1, int ne2, int ne3,
