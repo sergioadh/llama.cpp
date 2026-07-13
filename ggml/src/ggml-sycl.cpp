@@ -86,66 +86,6 @@ static __dpct_inline__ float op_add(const float a, const float b) {
     return a + b;
 }
 
-static void ggml_backend_sycl_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, uint8_t value,
-                                                   size_t offset, size_t size) {
-    GGML_SYCL_DEBUG(" [SYCL] call %s\n", __func__);
-    ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *) buffer->context;
-    SYCL_CHECK(ggml_sycl_set_device(ctx->device));
-    auto stream = &(dpct::dev_mgr::instance().get_device(ctx->device).default_queue());
-    if (size == 0) {
-        return;  // Nothing to do
-    }
-    if (tensor->data == nullptr) {
-        GGML_ABORT("Error: Tensor data pointer is null.\n");
-    }
-    void * target_ptr = static_cast<char *>(tensor->data) + offset;
-    SYCL_CHECK(CHECK_TRY_ERROR((*stream).memset(target_ptr, value, size)));
-    SYCL_CHECK(CHECK_TRY_ERROR((*stream).wait()));
-}
-
-static void ggml_backend_sycl_buffer_reset(ggml_backend_buffer_t buffer) {
-    GGML_SYCL_DEBUG("[SYCL] call %s\n", __func__);
-    if (buffer == nullptr) {
-        return;
-    }
-
-    ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *) buffer->context;
-
-    if (ctx != nullptr) {
-        for (ggml_tensor_extra_gpu * extra : ctx->tensor_extras) {
-            release_extra_gpu(extra);
-        }
-        ctx->tensor_extras.clear();  // reset the tensor_extras vector
-    }
-}
-
-static const ggml_backend_buffer_i ggml_backend_sycl_buffer_interface = {
-    /* .free_buffer     = */ ggml_backend_sycl_buffer_free_buffer,
-    /* .get_base        = */ ggml_backend_sycl_buffer_get_base,
-    /* .init_tensor     = */ ggml_backend_sycl_buffer_init_tensor,
-    /* .memset_tensor   = */ ggml_backend_sycl_buffer_memset_tensor,
-    /* .set_tensor      = */ ggml_backend_sycl_buffer_set_tensor,
-    /* .get_tensor      = */ ggml_backend_sycl_buffer_get_tensor,
-    /* .cpy_tensor      = */ ggml_backend_sycl_buffer_cpy_tensor,
-    /* .clear           = */ ggml_backend_sycl_buffer_clear,
-    /* .reset           = */ ggml_backend_sycl_buffer_reset,
-};
-
-// sycl buffer type
-struct ggml_backend_sycl_buffer_type_context {
-    int device;
-    std::string name;
-
-    // each buffer type has its own stream
-    queue_ptr stream = nullptr;
-};
-
-static const char * ggml_backend_sycl_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
-    ggml_backend_sycl_buffer_type_context * ctx = (ggml_backend_sycl_buffer_type_context *)buft->context;
-
-    return ctx->name.c_str();
-}
-
 template<float (*bin_op)(const float, const float), typename src0_t, typename src1_t, typename dst_t>
 static void k_bin_bcast(const src0_t * src0, const src1_t * src1, dst_t * dst,
         int ne0, int ne1, int ne2, int ne3,
@@ -4469,14 +4409,35 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
+static void ggml_backend_sycl_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor,
+                                                   uint8_t value, size_t offset, size_t size) try {
+    if (size == 0) {
+        return;  // Nothing to do
+    }
+    ggml_backend_sycl_buffer_context * ctx = (ggml_backend_sycl_buffer_context *)buffer->context;
+
+    ggml_sycl_set_device(ctx->device);
+    queue_ptr stream = ctx->stream;
+    if (tensor->data == nullptr) {
+        GGML_ABORT("Error: Tensor data pointer is null.\n");
+    }
+    void * target_ptr = static_cast<char *>(tensor->data) + offset;
+    SYCL_CHECK(CHECK_TRY_ERROR((*stream).memset(target_ptr, value, size)));
+    SYCL_CHECK(CHECK_TRY_ERROR((*stream).wait()));
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
+}
+
 static struct ggml_backend_buffer_i ggml_backend_sycl_buffer_interface = {
     /* .get_name        = */ ggml_backend_sycl_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_sycl_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_sycl_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_sycl_buffer_init_tensor,
-    /* .memset_tensor   = */ ggml_backend_sycl_buffer_memset_tensor,	
+    /* .memset_tensor   = */ ggml_backend_sycl_buffer_memset_tensor,
     /* .set_tensor      = */ ggml_backend_sycl_buffer_set_tensor,
-	/* .memset_tensor   =*/  NULL,
     /* .get_tensor      = */ ggml_backend_sycl_buffer_get_tensor,
     /* .cpy_tensor      = */ ggml_backend_sycl_buffer_cpy_tensor,
     /* .clear           = */ ggml_backend_sycl_buffer_clear,
